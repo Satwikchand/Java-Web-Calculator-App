@@ -11,14 +11,14 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      NEXUS_URL: http://18.226.34.227:8081
+      SONAR_HOST_URL: ${{ http://18.191.151.161:9000 }}
+      SONAR_TOKEN: ${{ squ_bbbf9bcb62458a7ccd523952c7d1c62f27892e08 }}
+      NEXUS_URL: http://18.224.171.220:8081
       NEXUS_REPO: maven-releases
       NEXUS_GROUP: com/web/cal
       NEXUS_ARTIFACT: webapp-add
-      TOMCAT_URL: http://18.216.0.11:8080/manager/text
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      TOMCAT_URL: http://18.219.141.210:8080/manager/html
+     # SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
     steps:
       - name: 📦 Checkout Code
@@ -43,8 +43,8 @@ jobs:
           mvn clean verify sonar:sonar \
             -DskipTests \
             -Dsonar.projectKey=JavaWebCalculator \
-            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
-            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+            -Dsonar.host.url=${{  http://18.191.151.161:9000 }} \
+            -Dsonar.login=${{ squ_bbbf9bcb62458a7ccd523952c7d1c62f27892e08 }}
 
       - name: ⚙️ Build WAR File
         run: |
@@ -54,8 +54,8 @@ jobs:
 
       - name: ⬆️ Upload WAR to Nexus
         env:
-          NEXUS_USER: ${{ secrets.NEXUS_USER }}
-          NEXUS_PASS: ${{ secrets.NEXUS_PASS }}
+          NEXUS_USER: ${{ admin }}
+          NEXUS_PASS: ${{ satwik@2002 }}
         run: |
           set -e
           WAR_FILE=$(ls target/*.war | head -1)
@@ -67,10 +67,10 @@ jobs:
 
       - name: 🚀 Deploy WAR to Tomcat (Force Clean)
         env:
-          TOMCAT_USER: ${{ secrets.TOMCAT_USER }}
-          TOMCAT_PASS: ${{ secrets.TOMCAT_PASS }}
-          NEXUS_USER: ${{ secrets.NEXUS_USER }}
-          NEXUS_PASS: ${{ secrets.NEXUS_PASS }}
+          TOMCAT_USER: ${{ tomcat }}
+          TOMCAT_PASS: ${{ tomcat }}
+          NEXUS_USER: ${{ admin }}
+          NEXUS_PASS: ${{ satwik@2002 }}
         run: |
           set -e
           APP_NAME="webapp-add"
@@ -108,7 +108,7 @@ jobs:
         id: verify
         run: |
           sleep 15
-          STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://18.216.0.11:8080/webapp-add/)
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://18.219.141.210:8080/webapp-add/)
           if [ "$STATUS" -eq 200 ]; then
             echo "✅ App is live with the latest code!"
           else
