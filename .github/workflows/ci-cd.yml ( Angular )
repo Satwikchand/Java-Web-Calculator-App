@@ -1,0 +1,120 @@
+stages:
+  - checkout
+  - install
+  - sonarqube
+  - test
+  - build
+  - package
+  - upload
+  - deploy
+
+variables:
+  SONARQUBE_SERVER: "SonarQube"
+  NEXUS_URL: "http://50.16.113.3:8081"
+  NEXUS_REPO: "starbugs-app"
+  NEXUS_GROUP: "com/web/starbugs"
+  NEXUS_ARTIFACT: "starbugs-app"
+  NGINX_SERVER: "13.218.85.77"
+  NGINX_WEB_ROOT: "/var/www/html"
+  VERSION: "0.0.${CI_PIPELINE_IID}"
+
+default:
+  image: node:18
+
+before_script:
+  - apt-get update && apt-get install -y curl tar ssh
+
+# === Stage 1: Checkout Code ===
+checkout_code:
+  stage: checkout
+  script:
+    - echo "📦 Cloning source from Git (implicit in GitLab CI)..."
+  # GitLab checks out by default
+
+# === Stage 2: Install Dependencies ===
+install_dependencies:
+  stage: install
+  script:
+    - echo "📥 Installing npm dependencies..."
+    - npm install
+    - echo "✅ Dependencies installed!"
+
+# === Stage 3: SonarQube Analysis ===
+sonarqube_analysis:
+  stage: sonarqube
+  script:
+    - echo "🔍 Running SonarQube static analysis..."
+    - npm install -g sonarqube-scanner
+    - |
+      sonar-scanner \
+        -Dsonar.projectKey=starbugs-app-js \
+        -Dsonar.projectName="starbugs App JS" \
+        -Dsonar.projectVersion=${VERSION} \
+        -Dsonar.sources=src \
+        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \
+        -Dsonar.sourceEncoding=UTF-8 \
+        -Dsonar.host.url=$SONARQUBE_URL \
+        -Dsonar.login=$SONARQUBE_TOKEN
+  variables:
+    SONARQUBE_URL: "YOUR_SONARQUBE_URL"  # Set in CI/CD vars
+    SONARQUBE_TOKEN: "$SONARQUBE_TOKEN" # Masked CI variable
+
+# === Stage 4: Run Tests ===
+run_tests:
+  stage: test
+  script:
+    - echo "🧪 Running tests..."
+    - npm test
+
+# === Stage 5: Build Artifact ===
+build_artifact:
+  stage: build
+  script:
+    - echo "⚙️ Building application..."
+    - npm run build
+    - echo "✅ Build Completed!"
+    - ls -lh dist/ || true
+  artifacts:
+    paths:
+      - dist/
+
+# === Stage 6: Package Artifact ===
+package_artifact:
+  stage: package
+  script:
+    - echo "📦 Creating tarball..."
+    - tar -czf ${NEXUS_ARTIFACT}-${VERSION}.tar.gz -C dist .
+    - echo "✅ Package created: ${NEXUS_ARTIFACT}-${VERSION}.tar.gz"
+    - ls -lh *.tar.gz
+  artifacts:
+    paths:
+      - "*.tar.gz"
+
+# === Stage 7: Upload Artifact to Nexus ===
+upload_to_nexus:
+  stage: upload
+  script:
+    - echo "📤 Uploading artifact to Nexus..."
+    - |
+      curl -v -u ${NEXUS_USR}:${NEXUS_PSW} --upload-file "${NEXUS_ARTIFACT}-${VERSION}.tar.gz" \
+        "${NEXUS_URL}/repository/${NEXUS_REPO}/${NEXUS_GROUP}/${NEXUS_ARTIFACT}/${VERSION}/${NEXUS_ARTIFACT}-${VERSION}.tar.gz"
+    - echo "✅ Artifact uploaded successfully to Nexus!"
+
+# === Stage 8: Deploy to Nginx ===
+deploy_to_nginx:
+  stage: deploy
+  script:
+    - echo "🚀 Deploying to Nginx server..."
+    - |
+      ssh -o StrictHostKeyChecking=no ubuntu@${NGINX_SERVER} "
+        sudo mkdir -p ${NGINX_WEB_ROOT} &&
+        sudo rm -rf ${NGINX_WEB_ROOT}/* &&
+        curl -f -u ${NEXUS_USR}:${NEXUS_PSW} -o /tmp/app.tar.gz \
+          '${NEXUS_URL}/repository/${NEXUS_REPO}/${NEXUS_GROUP}/${NEXUS_ARTIFACT}/${VERSION}/${NEXUS_ARTIFACT}-${VERSION}.tar.gz' &&
+        sudo tar -xzf /tmp/app.tar.gz -C ${NGINX_WEB_ROOT}/ &&
+        sudo chown -R www-data:www-data ${NGINX_WEB_ROOT}
+      "
+    - echo "✅ Deployment successful! Application live on Nginx!"
+  environment:
+    name: production
+    url: http://${NGINX_SERVER}
